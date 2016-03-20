@@ -1,21 +1,74 @@
 $(function() {
-    var iframe = $('#player1')[0];
-    var player = $f(iframe);
+    var player = $('iframe');
+    var playerOrigin = '*';
     var status = $('.status');
 
-    // When the player is ready, add listeners for pause, finish, and playProgress
-    player.addEvent('ready', function() {
-        status.text('ready');
+    // Listen for messages from the player
+    if (window.addEventListener) {
+        window.addEventListener('message', onMessageReceived, false);
+    }
+    else {
+        window.attachEvent('onmessage', onMessageReceived, false);
+    }
+
+    // Handle messages received from the player
+    function onMessageReceived(event) {
+        // Handle messages from the vimeo player only
+        if (!(/^https?:\/\/player.vimeo.com/).test(event.origin)) {
+            return false;
+        }
         
-        player.addEvent('pause', onPause);
-        player.addEvent('finish', onFinish);
-        player.addEvent('playProgress', onPlayProgress);
-    });
+        if (playerOrigin === '*') {
+            playerOrigin = event.origin;
+        }
+        
+        var data = JSON.parse(event.data);
+        
+        switch (data.event) {
+            case 'ready':
+                onReady();
+                break;
+               
+            case 'playProgress':
+                onPlayProgress(data.data);
+                break;
+                
+            case 'pause':
+                onPause();
+                break;
+               
+            case 'finish':
+                onFinish();
+                break;
+        }
+    }
 
     // Call the API when a button is pressed
-    $('button').bind('click', function() {
-        player.api($(this).text().toLowerCase());
+    $('button').on('click', function() {
+        post($(this).text().toLowerCase());
     });
+
+    // Helper function for sending a message to the player
+    function post(action, value) {
+        var data = {
+          method: action
+        };
+        
+        if (value) {
+            data.value = value;
+        }
+        
+        var message = JSON.stringify(data);
+        player[0].contentWindow.postMessage(message, playerOrigin);
+    }
+
+    function onReady() {
+        status.text('ready');
+        
+        post('addEventListener', 'pause');
+        post('addEventListener', 'finish');
+        post('addEventListener', 'playProgress');
+    }
 
     function onPause() {
         status.text('paused');
